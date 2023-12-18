@@ -39,7 +39,7 @@ namespace WebApi.RouteBuilders
 
             app.MapPost("/sendAlert", async (AlertRequest alertRequest) =>
             {
-                // Publish multiple events via rabbitmq (could also use redis) 
+                // Publish multiple events via rabbitmq (could also use redis but only in self-hosted kubernetes mode) 
                 using var client = new DaprClientBuilder().Build();
 
                 for (int i = 0; i < alertRequest.AlertTypes.Count(); i++)

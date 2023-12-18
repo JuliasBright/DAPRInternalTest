@@ -5,7 +5,7 @@ using Common.Models.Requests;
 
 using var client = new DaprClientBuilder().Build();
 
-List<string> alerts = new() { "Alert1", "Alert1", "Alert3" };
+List<string> alerts = new() { "Alert1", "Alert2", "Alert3" };
 
 var alertrequest = new AlertRequest
 {
