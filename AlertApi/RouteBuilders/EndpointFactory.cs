@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using System.Linq.Expressions;
 
-namespace WebApi.RouteBuilders
+namespace AlertApi.RouteBuilders
 {
     public static class EndpointFactory
     {
@@ -15,7 +15,7 @@ namespace WebApi.RouteBuilders
         {
             app.MapPost("/sendSms", async ([FromBody] string phoneNumber) =>
             {
-                // Invoke a binding to an sms service provider (twilio details you will need are in appsettings) 
+                // Invoke a binding to an sms service provider (You will need to create your own twilion account) 
                 // No body as free tier of twilio offers no message capability
                 using var client = new DaprClientBuilder().Build();
 
@@ -27,7 +27,7 @@ namespace WebApi.RouteBuilders
 
             app.MapPost("/sendEmail", async ([FromBody] string emailAddress) =>
             {
-                // Invoke a binding to an email service provider (sendgrid details you will need are in appsettings)
+                // Invoke a binding to an email service provider (you will need to create your own sendgrid account)
                 using var client = new DaprClientBuilder().Build();
 
                 var email = new Dictionary<string, string>();

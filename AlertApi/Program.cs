@@ -1,4 +1,4 @@
-using WebApi.RouteBuilders;
+using AlertApi.RouteBuilders;
 
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
