@@ -1,0 +1,20 @@
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: rabbitmq
+spec:
+  type: pubsub.rabbitmq
+  version: v1
+  metadata:
+  - name: host
+    value: "amqp://guest:guest@localhost:5672"
+  - name: durable
+    value: "true"
+  - name: deleteWhenUnused
+    value: "false"
+  - name: prefetchCount
+    value: "0"
+  - name: exchangeName
+    value: "alerts-exchange"
+  - name: contentType
+    value: "application/json"

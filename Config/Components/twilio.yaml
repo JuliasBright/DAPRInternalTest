@@ -1,0 +1,14 @@
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: twiliobinding
+spec:
+  type: bindings.twilio.sms
+  version: v1
+  metadata:
+  - name: accountSID
+    value:  "#TodO:: Will add upon Demo" 
+  - name: authToken
+    value:  "#TodO:: Will add upon Demo" 
+  - name: fromNumber
+    value: "+19206244275"

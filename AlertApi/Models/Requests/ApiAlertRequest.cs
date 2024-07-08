@@ -1,9 +1,7 @@
 ﻿using Common.Models.Requests;
 
-namespace WebApi.Models.Requests
-{
-    public class ApiAlertRequest : AlertRequest
-    {
-        
-    }
+public class ApiAlertRequest : AlertRequest {}
+
+public class SmsRequest {
+     public required string PhoneNumber { get; set; }
 }

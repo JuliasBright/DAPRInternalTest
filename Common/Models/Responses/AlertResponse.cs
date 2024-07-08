@@ -7,8 +7,10 @@ using System.Threading.Tasks;
 
 namespace Common.Models.Responses
 {
-    public class AlertResponse : IAlertResponse
+    public class AlertResponse
     {
-        public string Response { get ; set ; }
+        public string? Message { get; set; }
+        public DateTime ResponseTime { get; set; }
     }
 }
+

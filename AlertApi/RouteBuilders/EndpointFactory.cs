@@ -5,7 +5,9 @@ using Common.Models.Responses;
 using Dapr.Client;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 using System.Linq.Expressions;
+using System.Net;
 
 namespace AlertApi.RouteBuilders
 {
@@ -13,51 +15,136 @@ namespace AlertApi.RouteBuilders
     {
         public static void RegisterEndpoints(this WebApplication app)
         {
-            app.MapPost("/sendSms", async ([FromBody] string phoneNumber) =>
+            app.MapPost("/sendSms", async (HttpContext context) =>
             {
-                // Invoke a binding to an sms service provider (You will need to create your own twilion account) 
-                // No body as free tier of twilio offers no message capability
-                using var client = new DaprClientBuilder().Build();
-
-                var sms = new Dictionary<string, string>();
-                sms.Add("toNumber", phoneNumber);
-
-                app.Logger.LogInformation("SMS sent succesfully");
-            });
-
-            app.MapPost("/sendEmail", async ([FromBody] string emailAddress) =>
-            {
-                // Invoke a binding to an email service provider (you will need to create your own sendgrid account)
-                using var client = new DaprClientBuilder().Build();
-
-                var email = new Dictionary<string, string>();
-                email.Add("emailTo", emailAddress);
-                email.Add("subject", "This is a test email");
-
-                app.Logger.LogInformation("Email sent succesfully");
-            });
-
-            app.MapPost("/sendAlert", async (AlertRequest alertRequest) =>
-            {
-                // Publish multiple events via rabbitmq (could also use redis but only in self-hosted kubernetes mode) 
-                using var client = new DaprClientBuilder().Build();
-
-                for (int i = 0; i < alertRequest.AlertTypes.Count(); i++)
+                try
                 {
-                    app.Logger.LogInformation("Publishing alert: " + alertRequest.AlertTypes[i] + "\n      For client: " + alertRequest.ClientName);
-                    DateTime now = DateTime.Now;
+                    using var reader = new StreamReader(context.Request.Body);
+                    var requestBody = await reader.ReadToEndAsync();
+                    var request = JsonConvert.DeserializeObject<SmsRequest>(requestBody);
 
-                    PublishAlertRequest pubRequest = new PublishAlertRequest()
+                    if (request == null || string.IsNullOrEmpty(request.PhoneNumber))
                     {
-                        AlertType = alertRequest.AlertTypes[i],
-                        PublishRequestTime = now
+                        throw new ArgumentNullException("phoneNumber", "Phone number cannot be null or empty.");
+                    }
+
+                    string phoneNumber = request.PhoneNumber;
+
+                    using var client = new DaprClientBuilder().Build();
+
+                    var sms = new Dictionary<string, string>
+                    {
+                        { "toNumber", phoneNumber }
                     };
 
-                    app.Logger.LogInformation("Published data at: " + pubRequest.PublishRequestTime);    
+                    var jsonContent = JsonConvert.SerializeObject(sms);
+                    await client.InvokeBindingAsync("twiliobinding", "create", jsonContent);
 
-                    await Task.Delay(TimeSpan.FromSeconds(1));
+                    app.Logger.LogInformation("SMS sent successfully");
+
+                    var pubRequest = new PublishAlertRequest
+                    {
+                        AlertType = "SMS",
+                        PublishRequestTime = DateTime.Now
+                    };
+                    await client.PublishEventAsync("rabbitmq", "smsSend", pubRequest);
+
+                    context.Response.StatusCode = (int)HttpStatusCode.OK;
+                    await context.Response.WriteAsync(JsonConvert.SerializeObject(new AlertResponse
+                    {
+                        Message = "SMS sent successfully",
+                        ResponseTime = DateTime.Now
+                    }));
                 }
+                catch (Exception ex)
+                {
+                    app.Logger.LogError($"Failed to send SMS: {ex.Message}");
+                    context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+                    await context.Response.WriteAsync($"Failed to send SMS: {ex.Message}");
+                }
+            });
 
+            app.MapPost("/sendEmail", async (HttpContext context) =>
+            {
+                try
+                {
+                    using var reader = new StreamReader(context.Request.Body);
+                    var requestBody = await reader.ReadToEndAsync();
+                    var requestData = JsonConvert.DeserializeObject<Dictionary<string, string>>(requestBody);
+                    string emailAddress = requestData["emailAddress"];
+
+                    using var client = new DaprClientBuilder().Build();
+
+                    var email = new Dictionary<string, string>
+                    {
+                        { "emailTo", emailAddress },
+                        { "subject", "This is a test email" },
+                        { "body", "This is the body of the test email." }
+                    };
+
+                    await client.InvokeBindingAsync("emailbinding", "create", email);
+
+                    app.Logger.LogInformation("Email sent successfully");
+
+                    var pubRequest = new PublishAlertRequest
+                    {
+                        AlertType = "Email",
+                        PublishRequestTime = DateTime.Now
+                    };
+                    await client.PublishEventAsync("rabbitmq", "sendEmail", pubRequest);
+
+                    context.Response.StatusCode = (int)HttpStatusCode.OK;
+                    await context.Response.WriteAsync(JsonConvert.SerializeObject(new AlertResponse
+                    {
+                        Message = "Email sent successfully",
+                        ResponseTime = DateTime.Now
+                    }));
+                }
+                catch (Exception ex)
+                {
+                    app.Logger.LogError($"Failed to send Email: {ex.Message}");
+                    context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+                    await context.Response.WriteAsync($"Failed to send Email: {ex.Message}");
+                }
+            });
+
+            app.MapPost("/sendAlert", async (HttpContext context) =>
+            {
+                try
+                {
+                    using var reader = new StreamReader(context.Request.Body);
+                    var requestBody = await reader.ReadToEndAsync();
+                    var alertRequest = JsonConvert.DeserializeObject<AlertRequest>(requestBody);
+
+                    using var client = new DaprClientBuilder().Build();
+                    foreach (var alertType in alertRequest.AlertTypes)
+                    {
+                        app.Logger.LogInformation($"Publishing alert: {alertType} for client: {alertRequest.ClientName}");
+                        var pubRequest = new PublishAlertRequest
+                        {
+                            AlertType = alertType,
+                            PublishRequestTime = DateTime.Now
+                        };
+
+                        await client.PublishEventAsync("rabbitmq", "Alert Api", pubRequest);
+                        app.Logger.LogInformation($"Published data at: {pubRequest.PublishRequestTime}");
+
+                        await Task.Delay(TimeSpan.FromSeconds(1));
+                    }
+
+                    context.Response.StatusCode = (int)HttpStatusCode.OK;
+                    await context.Response.WriteAsync(JsonConvert.SerializeObject(new AlertResponse
+                    {
+                        Message = "Alerts published successfully",
+                        ResponseTime = DateTime.Now
+                    }));
+                }
+                catch (Exception ex)
+                {
+                    app.Logger.LogError($"Failed to publish alerts: {ex.Message}");
+                    context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+                    await context.Response.WriteAsync($"Failed to publish alerts: {ex.Message}");
+                }
             });
         }
     }
