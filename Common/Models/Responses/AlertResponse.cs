@@ -9,7 +9,7 @@ namespace Common.Models.Responses
 {
     public class AlertResponse
     {
-        public string? Message { get; set; }
+        public string Message { get; set; }
         public DateTime ResponseTime { get; set; }
     }
 }

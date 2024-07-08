@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WebApi", "WebApi.csproj", "
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AlertApiTests", "..\AlertApiTests\AlertApiTests.csproj", "{CEC6FA52-E634-4BA6-80F4-32899F8E75D0}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Common", "..\Common\Common.csproj", "{5B81B8A1-332A-4057-88CE-B36D2729DB74}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{CEC6FA52-E634-4BA6-80F4-32899F8E75D0}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{CEC6FA52-E634-4BA6-80F4-32899F8E75D0}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{CEC6FA52-E634-4BA6-80F4-32899F8E75D0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5B81B8A1-332A-4057-88CE-B36D2729DB74}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5B81B8A1-332A-4057-88CE-B36D2729DB74}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5B81B8A1-332A-4057-88CE-B36D2729DB74}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5B81B8A1-332A-4057-88CE-B36D2729DB74}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

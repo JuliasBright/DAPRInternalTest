@@ -22,38 +22,38 @@ class Program
 
         // Invoke SendSms endpoint
            //TODO:: uncomment upon demo 
-        // string phoneNumber = "+1234567890";
-        // var requestData = new Dictionary<string, string>
-        // {
-        //     { "PhoneNumber", phoneNumber }
-        // };
-        // var jsonContent = JsonConvert.SerializeObject(requestData);
+        string phoneNumber = "+27600157988";
+        var requestData = new Dictionary<string, string>
+        {
+            { "PhoneNumber", phoneNumber }
+        };
+        var jsonContent = JsonConvert.SerializeObject(requestData);
 
 
-        // var smsResponse = await client.InvokeMethodAsync<string, string>(
-        //     HttpMethod.Post,
-        //     "AlertApi",
-        //     "sendSms",
-        //     jsonContent);
+        var smsResponse = await client.InvokeMethodAsync<string, string>(
+            HttpMethod.Post,
+            "AlertApi",
+            "sendSms",
+            jsonContent);
 
-        // Console.WriteLine($"sendSms Response: {smsResponse}");
+        Console.WriteLine($"sendSms Response: {smsResponse}");
 
 
          // Invoke sendEmail endpoint
          //TODO:: uncomment upon demo
-        // string emailAddress = "juliasbright@gmail.com";
-        // var emailPayload = new Dictionary<string, string>
-        // {
-        //     { "emailAddress", emailAddress }
-        // };
-        // var jsonContents = JsonConvert.SerializeObject(emailPayload);
-        // var emailResponse = await client.InvokeMethodAsync<string, string>(
-        //     HttpMethod.Post,
-        //     "AlertApi",
-        //     "sendEmail",
-        //     jsonContents);
+        string emailAddress = "juliasbright@gmail.com";
+        var emailPayload = new Dictionary<string, string>
+        {
+            { "emailAddress", emailAddress }
+        };
+        var jsonContents = JsonConvert.SerializeObject(emailPayload);
+        var emailResponse = await client.InvokeMethodAsync<string, string>(
+            HttpMethod.Post,
+            "AlertApi",
+            "sendEmail",
+            jsonContents);
 
-        // Console.WriteLine($"sendEmail Response: {emailResponse}");
+        Console.WriteLine($"sendEmail Response: {emailResponse}");
 
         // Invoke sendAlert endpoint
         var alertResponse = await client.InvokeMethodAsync<AlertRequest, AlertResponse>(
