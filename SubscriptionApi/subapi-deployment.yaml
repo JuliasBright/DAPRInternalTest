@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: subapi
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: subapi
+  template:
+    metadata:
+      labels:
+        app: subapi
+    spec:
+    containers:
+      - name: subapi
+        image: your-registry/subapi:latest
+        ports:
+          - containerPort: 80
+        env:
+          - name: DAPR_HTTP_PORT
+            value: "3500"
+          - name: DAPR_GRPC_PORT
+            value: "50001"
+          - name: RABBITMQ_HOST
+            value: rabbitmq
+          - name: RABBITMQ_PORT
+            value: "5672"
+        command: ["dapr", "run", "--app-id", "subapi", "--components-path", "../Config/Components", "--dapr-http-port", "3500", "--dapr-grpc-port", "50003", "--log-level", "debug", "dotnet", "SubApi.dll"]
+        volumeMounts:
+          - name: config-volume
+            mountPath: ../Config/Components
+        resources:
+          limits:
+            cpu: 200m
+            memory: 512Mi
+          requests:
+            cpu: 100m
+        memory: 256Mi
+volumes:
+  - name: config-volume
+    configMap:
+      name: subapi-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: subapi
+spec:
+  selector:
+    app: subapi
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+  type: ClusterIP

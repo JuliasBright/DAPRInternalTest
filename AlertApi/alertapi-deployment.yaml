@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertapi
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: alertapi
+  template:
+    metadata:
+      labels:
+        app: alertapi
+    spec:
+    containers:
+      - name: alertapi
+        image: alertapi:latest
+        ports:
+          - containerPort: 80
+        env:
+          - name: DAPR_HTTP_PORT
+            value: "3500"
+          - name: DAPR_GRPC_PORT
+            value: "50001"
+          - name: RABBITMQ_HOST
+            value: rabbitmq
+          - name: RABBITMQ_PORT
+            value: "5672"
+        command: ["dapr", "run", "--app-id", "alertapi", "--components-path", "../Config/Components", "--dapr-http-port", "3500", "--dapr-grpc-port", "50001", "--log-level", "debug", "dotnet", "AlertApi.dll"]
+        volumeMounts:
+          - name: config-volume
+            mountPath: ../Config/Components
+        resources:
+          limits:
+            cpu: 200m
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alertapi
+spec:
+  selector:
+    app: alertapi
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+  type: ClusterIP
