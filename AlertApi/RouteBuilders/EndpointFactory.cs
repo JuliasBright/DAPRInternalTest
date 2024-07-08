@@ -6,9 +6,11 @@ using Dapr.Client;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using System;
 using System.Linq.Expressions;
 using System.Net;
 using System.Text.Json;
+using System.Threading.Tasks;
 
 namespace AlertApi.RouteBuilders
 {
@@ -30,22 +32,7 @@ namespace AlertApi.RouteBuilders
                     var sms = new Dictionary<string, string> { { "toNumber", phoneNumber } };
                     var jsonContent = JsonConvert.SerializeObject(sms);
 
-                    await (await client.InvokeBindingAsync("twiliobinding", "create", jsonContent))
-                        .ContinueWith(t => app.Logger.LogInformation("SMS sent successfully"))
-                        .Unwrap()
-                        .ContinueWith(t => client.PublishEventAsync("rabbitmq", "smsSend", new PublishAlertRequest
-                        {
-                            AlertType = "SMS",
-                            PublishRequestTime = DateTime.Now
-                        }))
-                        .Unwrap()
-                        .ContinueWith(t => context.Response.WriteAsync(JsonConvert.SerializeObject(new AlertResponse
-                        {
-                            Message = "SMS sent successfully",
-                            ResponseTime = DateTime.Now
-                        })))
-                        .Unwrap()
-                        .ContinueWith(t => context.Response.StatusCode = (int)HttpStatusCode.OK);
+                    await SendSmsAsync(client, jsonContent, context, app.Logger);
                 }
                 catch (Exception ex)
                 {
@@ -73,22 +60,7 @@ namespace AlertApi.RouteBuilders
                     };
                     var jsonContent = JsonConvert.SerializeObject(email);
 
-                    await (await client.InvokeBindingAsync("emailbinding", "create", jsonContent))
-                        .ContinueWith(t => app?.Logger.LogInformation("Email sent successfully"))
-                        .Unwrap()
-                        .ContinueWith(t => client.PublishEventAsync("rabbitmq", "sendEmail", new PublishAlertRequest
-                        {
-                            AlertType = "Email",
-                            PublishRequestTime = DateTime.Now
-                        }))
-                        .Unwrap()
-                        .ContinueWith(t => context.Response.WriteAsync(JsonConvert.SerializeObject(new AlertResponse
-                        {
-                            Message = "Email sent successfully",
-                            ResponseTime = DateTime.Now
-                        })))
-                        .Unwrap()
-                        .ContinueWith(t => { context.Response.StatusCode = (int)HttpStatusCode.OK; return Task.CompletedTask; });
+                    await SendEmailAsync(client, jsonContent, context, app.Logger);
                 }
                 catch (Exception ex)
                 {
@@ -117,11 +89,7 @@ namespace AlertApi.RouteBuilders
                             PublishRequestTime = DateTime.Now
                         };
 
-                        await (await client.PublishEventAsync("rabbitmq", "Alert Api", pubRequest))
-                         .ContinueWith(t => app?.Logger.LogInformation($"Published data at: {pubRequest.PublishRequestTime}"))
-                         .Unwrap()
-                         .ContinueWith(t => Task.Delay(TimeSpan.FromSeconds(1)))
-                         .Unwrap();
+                        await PublishAlertAsync(client, pubRequest, context, app.Logger);
                     }
 
                     await context.Response.WriteAsync(JsonConvert.SerializeObject(new AlertResponse
@@ -138,6 +106,54 @@ namespace AlertApi.RouteBuilders
                     await context.Response.WriteAsync($"Failed to publish alerts: {ex.Message}");
                 }
             });
+        }
+
+        private static async Task SendSmsAsync(DaprClient client, string jsonContent, HttpContext context, ILogger logger)
+        {
+            await client.InvokeBindingAsync("twiliobinding", "create", jsonContent);
+            logger.LogInformation("SMS sent successfully");
+
+            await client.PublishEventAsync("rabbitmq", "smsSend", new PublishAlertRequest
+            {
+                AlertType = "SMS",
+                PublishRequestTime = DateTime.Now
+            });
+
+            await context.Response.WriteAsync(JsonConvert.SerializeObject(new AlertResponse
+            {
+                Message = "SMS sent successfully",
+                ResponseTime = DateTime.Now
+            }));
+
+            context.Response.StatusCode = (int)HttpStatusCode.OK;
+        }
+
+        private static async Task SendEmailAsync(DaprClient client, string jsonContent, HttpContext context, ILogger logger)
+        {
+            await client.InvokeBindingAsync("emailbinding", "create", jsonContent);
+            logger.LogInformation("Email sent successfully");
+
+            await client.PublishEventAsync("rabbitmq", "sendEmail", new PublishAlertRequest
+            {
+                AlertType = "Email",
+                PublishRequestTime = DateTime.Now
+            });
+
+            await context.Response.WriteAsync(JsonConvert.SerializeObject(new AlertResponse
+            {
+                Message = "Email sent successfully",
+                ResponseTime = DateTime.Now
+            }));
+
+            context.Response.StatusCode = (int)HttpStatusCode.OK;
+        }
+
+        private static async Task PublishAlertAsync(DaprClient client, PublishAlertRequest pubRequest, HttpContext context, ILogger logger)
+        {
+            await client.PublishEventAsync("rabbitmq", "Alert Api", pubRequest);
+            logger.LogInformation($"Published data at: {pubRequest.PublishRequestTime}");
+
+            await Task.Delay(TimeSpan.FromSeconds(1));
         }
     }
 }
