@@ -20,3 +20,11 @@ public class SmsRequest {
     [StringLength(20, MinimumLength = 10, ErrorMessage = "Phone number must be between 10 and 20 characters.")]
     public required string PhoneNumber { get; set; }
 }
+public class EmailRequest {
+    /// <summary>
+    /// The email address of the sender.
+    /// </summary>
+    [Required(ErrorMessage = "From email is required.")]
+    [EmailAddress(ErrorMessage = "Invalid email address.")]
+    public required string FromEmail { get; set; }
+}

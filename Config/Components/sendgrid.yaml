@@ -1,14 +1,17 @@
-apiVersion: dapr.io/v1alpha1
 kind: Component
 metadata:
-  name: sendgrid
+  name: emailbinding
 spec:
   type: bindings.twilio.sendgrid
   version: v1
   metadata:
   - name: apiKey
     value: "#TodO:: Will add upon Demo" 
-  - name: fromEmail
+  - name: from
     value: "juliasbright@gmail.com"
-  - name: fromName
+  - name: name
     value: "Test Sender"
+  - name: to
+    value: "ex@ex.com"
+  - name: subject
+    value: "Hello!" 

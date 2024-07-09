@@ -1,20 +1,20 @@
 FROM mcr.microsoft.com/dotnet/sdk:7.0 AS builder
 WORKDIR /app
+EXPOSE 80
 
-COPY *.csproj .
-RUN dotnet restore
-
+FROM mcr.microsoft.com/dotnet/sdk:7.0 AS build
+WORKDIR /src
+COPY ["WebApi.csproj", "."]
+COPY ["../Common/Common.csproj", "../Common/"]
+RUN dotnet restore "./WebApi.csproj"
 COPY . .
-RUN dotnet publish --output /app/ --configuration Release --no-restore
-RUN sed -n 's:.*<AssemblyName>\(.*\)</AssemblyName>.*:\1:p' *.csproj > __assemblyname
-RUN if [ ! -s __assemblyname ]; then filename=$(ls *.csproj); echo ${filename%.*} > __assemblyname; fi
+WORKDIR "/src/."
+RUN dotnet build "WebApi.csproj" -c Release -o /app/build
 
-# Stage 2
-FROM mcr.microsoft.com/dotnet/aspnet:7.0
+FROM build AS publish
+RUN dotnet publish "WebApi.csproj" -c Release -o /app/publish /p:UseAppHost=false
+
+FROM base AS final
 WORKDIR /app
-COPY --from=builder /app .
-
-ENV PORT 8001
-EXPOSE 8001
-
-ENTRYPOINT dotnet $(cat /app/__assemblyname).dll --urls "http://*:8001"
+COPY --from=publish /app/publish .
+ENTRYPOINT ["dotnet", "WebApi.dll"]

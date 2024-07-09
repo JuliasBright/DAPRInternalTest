@@ -22,5 +22,7 @@
   <ItemGroup>
     <Folder Include="..\Config\Component\" />
   </ItemGroup>
-
+  <ItemGroup>
+    <ProjectReference Include="..\SubscriptionApi\SubApi.csproj" />
+  </ItemGroup>
 </Project>

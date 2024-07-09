@@ -12,3 +12,5 @@ spec:
     value:  "#TodO:: Will add upon Demo" 
   - name: fromNumber
     value: "+27600167988"
+  - name: toNumber
+    value: "+27600167988"

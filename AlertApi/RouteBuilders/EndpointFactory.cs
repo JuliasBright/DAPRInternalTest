@@ -37,49 +37,65 @@ namespace AlertApi.RouteBuilders
                 catch (Exception ex)
                 {
                     app.Logger.LogError($"Failed to send SMS: {ex.Message}");
+                    if (ex.InnerException != null)
+                    {
+                        app.Logger.LogError($"InnerException: {ex.InnerException.Message}");
+                    }
                     context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
                     await context.Response.WriteAsync($"Failed to send SMS: {ex.Message}");
                 }
             });
 
             app.MapPost("/sendEmail", async (HttpContext context) =>
+    {
+        try
+        {
+            var requestBody = await new StreamReader(context.Request.Body).ReadToEndAsync();
+            var requestData = JsonConvert.DeserializeObject<Dictionary<string, string>>(requestBody);
+            var emailAddress = requestData["emailAddress"];
+
+            var configuration = context.RequestServices.GetRequiredService<IConfiguration>();
+            var fromEmail = configuration["EmailSettings:FromEmail"];
+
+            using var client = new DaprClientBuilder().Build();
+
+            var email = new Dictionary<string, string>
             {
-                try
-                {
-                    var requestBody = await new StreamReader(context.Request.Body).ReadToEndAsync();
-                    var requestData = JsonConvert.DeserializeObject<Dictionary<string, string>>(requestBody);
-                    var emailAddress = requestData["emailAddress"];
+                { "from", fromEmail },
+                { "to", emailAddress },
+                { "subject", "This is a test email" },
+                { "body", "This is the body of the test email." }
+            };
+            var jsonContent = JsonConvert.SerializeObject(email);
 
-                    using var client = new DaprClientBuilder().Build();
+            app.Logger.LogInformation($"Sending email with JSON content: {jsonContent}");
 
-                    var email = new Dictionary<string, string>
-                    {
-                        { "emailTo", emailAddress },
-                        { "subject", "This is a test email" },
-                        { "body", "This is the body of the test email." }
-                    };
-                    var jsonContent = JsonConvert.SerializeObject(email);
+            await client.InvokeBindingAsync("emailbinding", "create", jsonContent);
 
-                    await SendEmailAsync(client, jsonContent, context, app.Logger);
-                }
-                catch (Exception ex)
-                {
-                    app.Logger.LogError($"Failed to send Email: {ex.Message}");
-                    context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
-                    await context.Response.WriteAsync($"Failed to send Email: {ex.Message}");
-                }
-            });
+            await context.Response.WriteAsync("Email sent successfully");
+        }
+        catch (Exception ex)
+        {
+            app.Logger.LogError($"Failed to send Email: {ex.Message}");
+            if (ex.InnerException != null)
+            {
+                app.Logger.LogError($"InnerException: {ex.InnerException.Message}");
+                app.Logger.LogError($"InnerException StackTrace: {ex.InnerException.StackTrace}");
+            }
+            context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+            await context.Response.WriteAsync($"Failed to send Email: {ex.Message}");
+        }
+    });
 
             app.MapPost("/sendAlert", async (HttpContext context) =>
             {
                 try
                 {
-                    var requestBody = await new StreamReader(context.Request.Body).ReadToEndAsync();
-                    var alertRequest = JsonConvert.DeserializeObject<AlertRequest>(requestBody)
-                                       ?? throw new ArgumentNullException("request", "Request cannot be null.");
+                    using var reader = new StreamReader(context.Request.Body);
+                    var requestBody = await reader.ReadToEndAsync();
+                    var alertRequest = JsonConvert.DeserializeObject<AlertRequest>(requestBody);
 
                     using var client = new DaprClientBuilder().Build();
-
                     foreach (var alertType in alertRequest.AlertTypes)
                     {
                         app.Logger.LogInformation($"Publishing alert: {alertType} for client: {alertRequest.ClientName}");
@@ -89,15 +105,18 @@ namespace AlertApi.RouteBuilders
                             PublishRequestTime = DateTime.Now
                         };
 
-                        await PublishAlertAsync(client, pubRequest, context, app.Logger);
+                        await client.PublishEventAsync("rabbitmq", "Alert Api", pubRequest);
+                        app.Logger.LogInformation($"Published data at: {pubRequest.PublishRequestTime}");
+
+                        await Task.Delay(TimeSpan.FromSeconds(1));
                     }
 
+                    context.Response.StatusCode = (int)HttpStatusCode.OK;
                     await context.Response.WriteAsync(JsonConvert.SerializeObject(new AlertResponse
                     {
                         Message = "Alerts published successfully",
                         ResponseTime = DateTime.Now
                     }));
-                    context.Response.StatusCode = (int)HttpStatusCode.OK;
                 }
                 catch (Exception ex)
                 {
@@ -119,41 +138,49 @@ namespace AlertApi.RouteBuilders
                 PublishRequestTime = DateTime.Now
             });
 
-            await context.Response.WriteAsync(JsonConvert.SerializeObject(new AlertResponse
+            var response = new AlertResponse
             {
                 Message = "SMS sent successfully",
                 ResponseTime = DateTime.Now
-            }));
+            };
 
+            await context.Response.WriteAsync(JsonConvert.SerializeObject(response));
             context.Response.StatusCode = (int)HttpStatusCode.OK;
         }
 
         private static async Task SendEmailAsync(DaprClient client, string jsonContent, HttpContext context, ILogger logger)
         {
-            await client.InvokeBindingAsync("emailbinding", "create", jsonContent);
-            logger.LogInformation("Email sent successfully");
-
-            await client.PublishEventAsync("rabbitmq", "sendEmail", new PublishAlertRequest
+            try
             {
-                AlertType = "Email",
-                PublishRequestTime = DateTime.Now
-            });
+                await client.InvokeBindingAsync("emailbinding", "create", jsonContent);
+                logger.LogInformation("Email sent successfully");
 
-            await context.Response.WriteAsync(JsonConvert.SerializeObject(new AlertResponse
+                await client.PublishEventAsync("rabbitmq", "sendEmail", new PublishAlertRequest
+                {
+                    AlertType = "Email",
+                    PublishRequestTime = DateTime.Now
+                });
+
+                var response = new AlertResponse
+                {
+                    Message = "Email sent successfully",
+                    ResponseTime = DateTime.Now
+                };
+
+                await context.Response.WriteAsync(JsonConvert.SerializeObject(response));
+                context.Response.StatusCode = (int)HttpStatusCode.OK;
+            }
+            catch (Exception ex)
             {
-                Message = "Email sent successfully",
-                ResponseTime = DateTime.Now
-            }));
-
-            context.Response.StatusCode = (int)HttpStatusCode.OK;
+                logger.LogError($"Failed to send Email: {ex.Message}");
+                if (ex.InnerException != null)
+                {
+                    logger.LogError($"InnerException: {ex.InnerException.Message}");
+                }
+                context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+                await context.Response.WriteAsync($"Failed to send Email: {ex.Message}");
+            }
         }
 
-        private static async Task PublishAlertAsync(DaprClient client, PublishAlertRequest pubRequest, HttpContext context, ILogger logger)
-        {
-            await client.PublishEventAsync("rabbitmq", "Alert Api", pubRequest);
-            logger.LogInformation($"Published data at: {pubRequest.PublishRequestTime}");
-
-            await Task.Delay(TimeSpan.FromSeconds(1));
-        }
     }
 }

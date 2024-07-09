@@ -22,7 +22,7 @@ namespace AlertApi.Tests
             // Arrange
             var app = new Mock<WebApplication>();
 
-            var requestBody = JsonConvert.SerializeObject(new ApiAlertRequest
+            var requestBody = JsonConvert.SerializeObject(new SmsRequest
             {
                 PhoneNumber = "+1234567890"
             });
