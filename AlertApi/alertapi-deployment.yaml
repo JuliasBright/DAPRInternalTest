@@ -12,7 +12,7 @@ spec:
       labels:
         app: alertapi
     spec:
-    containers:
+      containers:
       - name: alertapi
         image: alertapi:latest
         ports:
@@ -27,9 +27,7 @@ spec:
           - name: RABBITMQ_PORT
             value: "5672"
         command: ["dapr", "run", "--app-id", "alertapi", "--components-path", "../Config/Components", "--dapr-http-port", "3500", "--dapr-grpc-port", "50001", "--log-level", "debug", "dotnet", "AlertApi.dll"]
-        volumeMounts:
-          - name: config-volume
-            mountPath: ../Config/Components
+       
         resources:
           limits:
             cpu: 200m
@@ -37,6 +35,10 @@ spec:
           requests:
             cpu: 100m
             memory: 256Mi
+      volumes:
+      - name: config-volume
+        configMap:
+          name: alertapi-config  
 ---
 apiVersion: v1
 kind: Service

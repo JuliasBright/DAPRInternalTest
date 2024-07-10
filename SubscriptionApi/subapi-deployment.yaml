@@ -12,7 +12,7 @@ spec:
       labels:
         app: subapi
     spec:
-    containers:
+      containers: 
       - name: subapi
         image: SubscriptionApi/subapi:latest
         ports:
@@ -37,10 +37,10 @@ spec:
           requests:
             cpu: 100m
         memory: 256Mi
-volumes:
-  - name: config-volume
-    configMap:
-      name: subapi-config
+      volumes:
+      - name: config-volume
+        configMap:
+          name: subapi-config
 ---
 apiVersion: v1
 kind: Service
