@@ -14,7 +14,7 @@ spec:
     spec:
     containers:
       - name: subapi
-        image: your-registry/subapi:latest
+        image: SubscriptionApi/subapi:latest
         ports:
           - containerPort: 80
         env:

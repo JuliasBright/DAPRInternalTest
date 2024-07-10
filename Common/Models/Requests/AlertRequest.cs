@@ -1,6 +1,7 @@
 ﻿using Common.Interfaces.Requests;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -9,7 +10,30 @@ namespace Common.Models.Requests
 {
     public class AlertRequest : IAlertRequest
     {
-        public string ClientName { get ; set ; }
-        public IList<string> AlertTypes { get ; set; }
+        public string ClientName { get; set; }
+        public IList<string> AlertTypes { get; set; }
+    }
+    /// <summary>
+    /// SmsRequest class, used to send SMS requests.
+    /// </summary>
+    public class SmsRequest
+    {
+        /// <summary>
+        /// The phone number to send the SMS to.
+        /// This property is required and must not be null or empty.
+        /// </summary>
+        [Required]
+        [RegularExpression(@"^\+?\d{1,4}?[-.\s]?\(?(?:\d{2,3}|\d{4})\)?[-.\s]?\d\d\d?[-.\s]?\d\d\d\d$", ErrorMessage = "Invalid phone number format.")]
+        [StringLength(20, MinimumLength = 10, ErrorMessage = "Phone number must be between 10 and 20 characters.")]
+        public required string PhoneNumber { get; set; }
+    }
+    public class EmailRequest
+    {
+        /// <summary>
+        /// The email address of the sender.
+        /// </summary>
+        [Required(ErrorMessage = "From email is required.")]
+        [EmailAddress(ErrorMessage = "Invalid email address.")]
+        public required string FromEmail { get; set; }
     }
 }

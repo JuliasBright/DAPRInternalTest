@@ -1,16 +1,13 @@
-﻿using Common.Interfaces.Requests;
-using Common.Models.Requests;
+﻿using Common.Models.Requests;
 using Common.Models.Requests.Publish;
 using Common.Models.Responses;
 using Dapr.Client;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
-using System;
-using System.Linq.Expressions;
 using System.Net;
-using System.Text.Json;
-using System.Threading.Tasks;
+using Twilio;
+using Twilio.Rest.Api.V2010.Account;
+using SendGrid;
+using SendGrid.Helpers.Mail;
 
 namespace AlertApi.RouteBuilders
 {
@@ -18,74 +15,146 @@ namespace AlertApi.RouteBuilders
     {
         public static void RegisterEndpoints(this WebApplication app)
         {
-            app.MapPost("/sendSms", async (HttpContext context) =>
+           app.MapPost("/sendSms", async (HttpContext context) =>
+        {
+            try
             {
-                try
+                var requestBody = await new StreamReader(context.Request.Body).ReadToEndAsync();
+                var request = JsonConvert.DeserializeObject<SmsRequest>(requestBody)
+                                ?? throw new ArgumentNullException("request", "Request cannot be null.");
+                var phoneNumber = request.PhoneNumber ?? throw new ArgumentNullException("phoneNumber", "Phone number cannot be null or empty.");
+
+                using var client = new DaprClientBuilder().Build();
+
+                var configuration = context.RequestServices.GetRequiredService<IConfiguration>();
+                var twilioAccountSid = configuration["Twilio:AccountSid"];
+                var twilioAuthToken = configuration["Twilio:AuthToken"];
+                var fromNumber = configuration["Twilio:From"];
+
+                if (string.IsNullOrEmpty(twilioAccountSid) || string.IsNullOrEmpty(twilioAuthToken) || string.IsNullOrEmpty(fromNumber))
                 {
-                    var requestBody = await new StreamReader(context.Request.Body).ReadToEndAsync();
-                    var request = JsonConvert.DeserializeObject<SmsRequest>(requestBody)
-                                    ?? throw new ArgumentNullException("request", "Request cannot be null.");
-                    var phoneNumber = request.PhoneNumber ?? throw new ArgumentNullException("phoneNumber", "Phone number cannot be null or empty.");
-
-                    using var client = new DaprClientBuilder().Build();
-
-                    var sms = new Dictionary<string, string> { { "toNumber", phoneNumber } };
-                    var jsonContent = JsonConvert.SerializeObject(sms);
-
-                    await SendSmsAsync(client, jsonContent, context, app.Logger);
+                    throw new Exception("Twilio configuration is incomplete.");
                 }
-                catch (Exception ex)
+
+                TwilioClient.Init(twilioAccountSid, twilioAuthToken);
+
+                var message = await MessageResource.CreateAsync(
+                    body: "Dapr is awesome",
+                    from: new Twilio.Types.PhoneNumber(fromNumber),
+                    to: new Twilio.Types.PhoneNumber(phoneNumber)
+                );
+
+                app.Logger.LogInformation($"SMS sent successfully. Message SID: {message.Sid}");
+
+                var metadata = new Dictionary<string, string>
                 {
-                    app.Logger.LogError($"Failed to send SMS: {ex.Message}");
-                    if (ex.InnerException != null)
-                    {
-                        app.Logger.LogError($"InnerException: {ex.InnerException.Message}");
-                    }
-                    context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
-                    await context.Response.WriteAsync($"Failed to send SMS: {ex.Message}");
+                    { "toNumber", phoneNumber },
+                    { "fromNumber", fromNumber }
+                };
+
+                await client.InvokeBindingAsync<object>("twiliobinding", "create", null, metadata);
+                var subApiResponse = await client.InvokeBindingAsync<object, object>("subapi", "post", metadata);
+                app.Logger.LogInformation($"Posted to SubApi: {(int)HttpStatusCode.OK}");
+                
+                context.Response.StatusCode = (int)HttpStatusCode.OK;
+                await context.Response.WriteAsync("SMS sent successfully");
+            }
+            catch (Exception ex)
+            {
+                app.Logger.LogError($"Failed to send SMS: {ex.Message}");
+                if (ex.InnerException != null)
+                {
+                    app.Logger.LogError($"InnerException: {ex.InnerException.Message}");
                 }
-            });
+                context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+                await context.Response.WriteAsync($"Failed to send SMS: {ex.Message}");
+            }
+        });
+
+
 
             app.MapPost("/sendEmail", async (HttpContext context) =>
-    {
-        try
-        {
-            var requestBody = await new StreamReader(context.Request.Body).ReadToEndAsync();
-            var requestData = JsonConvert.DeserializeObject<Dictionary<string, string>>(requestBody);
-            var emailAddress = requestData["emailAddress"];
+             {
+                 try
+                 {   using var client = new DaprClientBuilder().Build();
+                     var requestBody = await new StreamReader(context.Request.Body).ReadToEndAsync();
+                     var requestData = JsonConvert.DeserializeObject<Dictionary<string, string>>(requestBody);
+                     if (requestData == null || !requestData.ContainsKey("emailAddress"))
+                     {
+                         throw new ArgumentException("Invalid request body: 'emailAddress' is required.");
+                     }
 
-            var configuration = context.RequestServices.GetRequiredService<IConfiguration>();
-            var fromEmail = configuration["EmailSettings:FromEmail"];
+                     var emailAddress = requestData["emailAddress"];
+                     var configuration = context.RequestServices.GetRequiredService<IConfiguration>();
+                     var fromEmail = configuration["EmailSettings:FromEmail"];
+                     var emailApiKey = configuration["EmailSettings:ApiKey"];
 
-            using var client = new DaprClientBuilder().Build();
+                     if (string.IsNullOrEmpty(fromEmail))
+                     {
+                         throw new Exception("From email address is not configured.");
+                     }
 
-            var email = new Dictionary<string, string>
-            {
-                { "from", fromEmail },
-                { "to", emailAddress },
-                { "subject", "This is a test email" },
-                { "body", "This is the body of the test email." }
-            };
-            var jsonContent = JsonConvert.SerializeObject(email);
+                     if (string.IsNullOrEmpty(emailApiKey))
+                     {
+                         throw new Exception("SendGrid API key is not configured.");
+                     }
 
-            app.Logger.LogInformation($"Sending email with JSON content: {jsonContent}");
+                    var sendGridClient = new SendGridClient(emailApiKey);
 
-            await client.InvokeBindingAsync("emailbinding", "create", jsonContent);
+                    // Prepare email content
+                    var from = new EmailAddress(fromEmail);
+                    var to = new EmailAddress(emailAddress);
+                    var subject = "This is a test email";
+                    var plainTextContent = "This is the body of the test email.";
+                    var htmlContent = "<strong>This is the body of the test email.</strong>";
+                    var msg = MailHelper.CreateSingleEmail(from, to, subject, plainTextContent, htmlContent);
 
-            await context.Response.WriteAsync("Email sent successfully");
-        }
-        catch (Exception ex)
-        {
-            app.Logger.LogError($"Failed to send Email: {ex.Message}");
-            if (ex.InnerException != null)
-            {
-                app.Logger.LogError($"InnerException: {ex.InnerException.Message}");
-                app.Logger.LogError($"InnerException StackTrace: {ex.InnerException.StackTrace}");
-            }
-            context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
-            await context.Response.WriteAsync($"Failed to send Email: {ex.Message}");
-        }
-    });
+                    // Send email asynchronously
+                    var response = await sendGridClient.SendEmailAsync(msg);
+
+
+                     var metadata = new Dictionary<string, string>
+                     {
+                        { "emailFrom", fromEmail },
+                        { "emailTo", emailAddress },
+                        { "subject", "This is a test email" },
+                        { "body", "This is the body of the test email." }
+                     };
+
+                     metadata.Add("api-key", emailApiKey);
+
+                     app.Logger.LogInformation($"Sending email with metadata: {JsonConvert.SerializeObject(metadata)}");
+
+                     try
+                     {
+                         await client.InvokeBindingAsync<object>("emailbinding", "create", null, metadata);
+                         context.Response.StatusCode = (int)HttpStatusCode.OK;
+                         await context.Response.WriteAsync("Email sent successfully");
+                     }
+                     catch (Dapr.Client.InvocationException ex)
+                     {
+                         app.Logger.LogError($"Failed to send Email: {ex.Message}");
+                         if (ex.InnerException != null)
+                         {
+                             app.Logger.LogError($"InnerException: {ex.InnerException.Message}");
+                             app.Logger.LogError($"InnerException StackTrace: {ex.InnerException.StackTrace}");
+                         }
+                         context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+                         await context.Response.WriteAsync($"Failed to send Email: {ex.Message}");
+                     }
+                 }
+                 catch (Exception ex)
+                 {
+                     app.Logger.LogError($"Failed to send Email: {ex.Message}");
+                     if (ex.InnerException != null)
+                     {
+                         app.Logger.LogError($"InnerException: {ex.InnerException.Message}");
+                         app.Logger.LogError($"InnerException StackTrace: {ex.InnerException.StackTrace}");
+                     }
+                     context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+                     await context.Response.WriteAsync($"Failed to send Email: {ex.Message}");
+                 }
+             });
 
             app.MapPost("/sendAlert", async (HttpContext context) =>
             {
@@ -107,6 +176,8 @@ namespace AlertApi.RouteBuilders
 
                         await client.PublishEventAsync("rabbitmq", "Alert Api", pubRequest);
                         app.Logger.LogInformation($"Published data at: {pubRequest.PublishRequestTime}");
+                        var subApiResponse = await client.InvokeBindingAsync<object, object>("subapi", "post", pubRequest);
+                        app.Logger.LogInformation($"Posted to SubApi: {(int)HttpStatusCode.OK}");
 
                         await Task.Delay(TimeSpan.FromSeconds(1));
                     }
@@ -127,9 +198,9 @@ namespace AlertApi.RouteBuilders
             });
         }
 
-        private static async Task SendSmsAsync(DaprClient client, string jsonContent, HttpContext context, ILogger logger)
+        private static async Task SendSmsAsync(DaprClient client, Dictionary<string, string> metadata, HttpContext context, ILogger logger)
         {
-            await client.InvokeBindingAsync("twiliobinding", "create", jsonContent);
+            await client.InvokeBindingAsync<object>("emailbinding", "create", null, (IReadOnlyDictionary<string, string>)metadata);
             logger.LogInformation("SMS sent successfully");
 
             await client.PublishEventAsync("rabbitmq", "smsSend", new PublishAlertRequest
@@ -147,40 +218,5 @@ namespace AlertApi.RouteBuilders
             await context.Response.WriteAsync(JsonConvert.SerializeObject(response));
             context.Response.StatusCode = (int)HttpStatusCode.OK;
         }
-
-        private static async Task SendEmailAsync(DaprClient client, string jsonContent, HttpContext context, ILogger logger)
-        {
-            try
-            {
-                await client.InvokeBindingAsync("emailbinding", "create", jsonContent);
-                logger.LogInformation("Email sent successfully");
-
-                await client.PublishEventAsync("rabbitmq", "sendEmail", new PublishAlertRequest
-                {
-                    AlertType = "Email",
-                    PublishRequestTime = DateTime.Now
-                });
-
-                var response = new AlertResponse
-                {
-                    Message = "Email sent successfully",
-                    ResponseTime = DateTime.Now
-                };
-
-                await context.Response.WriteAsync(JsonConvert.SerializeObject(response));
-                context.Response.StatusCode = (int)HttpStatusCode.OK;
-            }
-            catch (Exception ex)
-            {
-                logger.LogError($"Failed to send Email: {ex.Message}");
-                if (ex.InnerException != null)
-                {
-                    logger.LogError($"InnerException: {ex.InnerException.Message}");
-                }
-                context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
-                await context.Response.WriteAsync($"Failed to send Email: {ex.Message}");
-            }
-        }
-
     }
 }

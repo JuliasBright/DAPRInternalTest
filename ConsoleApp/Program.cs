@@ -1,11 +1,7 @@
 ﻿using Dapr.Client;
-using System.Net.Http.Json;
-using System.Text.Json.Serialization;
 using Common.Models.Requests;
 using Common.Models.Requests.Publish;
-using Common.Models.Responses;
-using Newtonsoft.Json;
-using System.Data;
+
 class Program
 {
     static async Task Main(string[] args)
@@ -21,48 +17,29 @@ class Program
         };
 
         // Invoke SendSms endpoint
-           //TODO:: uncomment upon demo 
-        // string phoneNumber = "+27600157988";
-        // var requestData = new Dictionary<string, string>
-        // {
-        //     { "PhoneNumber", phoneNumber }
-        // };
-        // var jsonContent = JsonConvert.SerializeObject(requestData);
+        string phoneNumber = "+27847576329";
+        var requestData = new SmsRequest
+        {
+            PhoneNumber = phoneNumber
+        };
+        var smsPayload = new Dictionary<string, string>
+        {
+            { "PhoneNumber", phoneNumber }
+        };
 
+        await InvokeMethodAsync(client, HttpMethod.Post, "AlertApi", "sendSms", smsPayload);
 
-        // var smsResponse = await client.InvokeMethodAsync<string, string>(
-        //     HttpMethod.Post,
-        //     "AlertApi",
-        //     "sendSms",
-        //     jsonContent);
+        // Invoke sendEmail endpoint
+        string emailAddress = "juliasbright@gmail.com";
+        var emailPayload = new Dictionary<string, string>
+        {
+            { "emailAddress", emailAddress }
+        };
 
-        // Console.WriteLine($"sendSms Response: {smsResponse}");
-
-
-         // Invoke sendEmail endpoint
-         //TODO:: uncomment upon demo
-        // string emailAddress = "juliasbright@gmail.com";
-        // var emailPayload = new Dictionary<string, string>
-        // {
-        //     { "emailAddress", emailAddress }
-        // };
-        // var jsonContents = JsonConvert.SerializeObject(emailPayload);
-        // var emailResponse = await client.InvokeMethodAsync<string, string>(
-        //     HttpMethod.Post,
-        //     "AlertApi",
-        //     "sendEmail",
-        //     jsonContents);
-
-        // Console.WriteLine($"sendEmail Response: {emailResponse}");
+        await InvokeMethodAsync(client, HttpMethod.Post, "AlertApi", "sendEmail", emailPayload);
 
         // Invoke sendAlert endpoint
-        var alertResponse = await client.InvokeMethodAsync<AlertRequest, AlertResponse>(
-            HttpMethod.Post,
-            "AlertApi",
-            "sendAlert",
-            alertRequest);
-
-        Console.WriteLine($"sendAlert Response: {alertResponse}");
+        await InvokeMethodAsync(client, HttpMethod.Post, "AlertApi", "sendAlert", alertRequest);
 
         foreach (var alertType in alertRequest.AlertTypes)
         {
@@ -80,5 +57,36 @@ class Program
         }
 
         Console.ReadLine();
+    }
+
+    static async Task InvokeMethodAsync(DaprClient client, HttpMethod method, string app, string methodname, object payload)
+    {
+        try
+        {
+            var response = await client.InvokeMethodAsync<object, object>(method, app, methodname, payload);
+            Console.WriteLine($"{methodname} Response: {response}");
+        }
+        catch (InvocationException ex)
+        {
+            await HandleExceptionAsync(ex);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"An unexpected error occurred: {ex.Message}");
+        }
+    }
+
+    static async Task HandleExceptionAsync(InvocationException ex)
+    {
+        Console.WriteLine($"An error occurred while invoking method: {ex.Message}");
+        if (ex.InnerException != null)
+        {
+            Console.WriteLine($"Inner exception: {ex.InnerException.Message}");
+        }
+        if (ex.Response != null)
+        {
+            Console.WriteLine("Error response:");
+            Console.WriteLine(await ex.Response.Content.ReadAsStringAsync());
+        }
     }
 }

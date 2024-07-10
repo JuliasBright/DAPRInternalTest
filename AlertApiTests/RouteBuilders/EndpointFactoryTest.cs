@@ -12,7 +12,7 @@ using System.IO;
 using System.Net;
 using System.Threading.Tasks;
 
-namespace AlertApi.Tests
+namespace AlertApiTests
 {
     public class EndpointFactoryTests
     {
